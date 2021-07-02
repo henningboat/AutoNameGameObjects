@@ -7,7 +7,7 @@ using UnityEngine.UI;
 
 namespace Tests.Runtime
 {
-    public class {{FRIENDLY_NAME}}Tests
+    public class Auto Name Game ObjectsTests
     {
         [SetUp]
         public void Setup()
