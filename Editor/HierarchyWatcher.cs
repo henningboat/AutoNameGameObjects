@@ -1,58 +1,101 @@
 ﻿using UnityEditor;
 using UnityEngine;
 
-namespace Editor
+namespace AutoRenameGameObject.Editor
 {
+    /// <summary>
+    ///     Static class that observes changes in the hierarchy. It will notice when
+    ///     the user is adding a script to an empty game object. If this script is marked
+    ///     with the AutoNameGameObjectAttribute, it will rename the class if the game object
+    ///     currently has the default name ("GameObject" or "GameObject (x)"
+    /// </summary>
     [InitializeOnLoad]
-    public static class HierarchyWatcher
+    internal static class HierarchyWatcher
     {
-        private const string DefaultGameobjectName = "GameObject";
+        private const string DefaultGameObjectName = "GameObject";
         private const string DefaultCopiedGameObjectName = "GameObject (";
 
-        #region Static
-
-        private static GameObject s_ObservedObject;
+        private static GameObject s_ObservedGameObject;
         private static readonly TypeCache.TypeCollection s_TypesWithAttributes;
 
-        private static bool HasDefaultGameObjectName(GameObject gameObject)
+        static HierarchyWatcher()
         {
-            return gameObject.name == DefaultGameobjectName || gameObject.name.StartsWith(DefaultCopiedGameObjectName);
+            EditorApplication.hierarchyChanged += OnHierarchyChanged;
+            Selection.selectionChanged += OnSelectionChanged;
+
+            s_TypesWithAttributes = TypeCache.GetTypesWithAttribute<AutoNameGameObjectAttribute>();
         }
 
         private static void OnHierarchyChanged()
         {
-            if (s_ObservedObject == null)
+            if (Settings.Mode == Mode.Disabled)
             {
                 return;
             }
 
-            var components = s_ObservedObject.GetComponents<Component>();
+            if (s_ObservedGameObject == null)
+            {
+                return;
+            }
+
+            if (!HasDefaultGameObjectName(s_ObservedGameObject))
+            {
+                s_ObservedGameObject = null;
+                return;
+            }
+
+            var components = s_ObservedGameObject.GetComponents<Component>();
             if (components.Length != 1)
             {
-                foreach (var component in components)
-                    if (HasAttribute(component))
-                    {
-                        RenameGameObject(component);
-                    }
-
-                s_ObservedObject = null;
+                if (ShouldRenameGameObject(components, out var name))
+                {
+                    s_ObservedGameObject.name = name;
+                    s_ObservedGameObject = null;
+                }
             }
         }
 
-        private static void RenameGameObject(Component component)
+        private static bool ShouldRenameGameObject(Component[] components, out string name)
         {
-            s_ObservedObject.name = component.GetType().Name;
-            s_ObservedObject = null;
+            name = default;
+            if (Settings.Mode == Mode.Disabled)
+            {
+                return false;
+            }
+
+            foreach (var component in components)
+            {
+                var componentType = component.GetType();
+
+                //all game objects have a Transform and we never want to use that as the name
+                if (componentType == typeof(Transform))
+                {
+                    continue;
+                }
+
+                if (Settings.Mode == Mode.ForComponentsWithAttribute)
+                {
+                    if (!s_TypesWithAttributes.Contains(componentType))
+                    {
+                        continue;
+                    }
+                }
+
+                name = ObjectNames.NicifyVariableName(componentType.Name);
+                return true;
+            }
+
+            return false;
         }
 
-        private static bool HasAttribute(Component component)
+        private static bool HasDefaultGameObjectName(GameObject gameObject)
         {
-            return s_TypesWithAttributes.Contains(component.GetType());
+            return gameObject.name == DefaultGameObjectName || gameObject.name.StartsWith(DefaultCopiedGameObjectName);
         }
 
         private static void OnSelectionChanged()
         {
-            s_ObservedObject = null;
+            s_ObservedGameObject = null;
 
             //should we add support for multiple game objects?
             if (Selection.count != 1)
@@ -74,7 +117,7 @@ namespace Editor
             {
                 return;
             }
-            
+
             //An empty game object always contains a Transform, so we check if the component count is 1
             var components = Selection.activeGameObject.GetComponents<Component>();
             if (components.Length != 1)
@@ -82,17 +125,7 @@ namespace Editor
                 return;
             }
 
-            s_ObservedObject = Selection.activeGameObject;
+            s_ObservedGameObject = Selection.activeGameObject;
         }
-
-        static HierarchyWatcher()
-        {
-            EditorApplication.hierarchyChanged += OnHierarchyChanged;
-            Selection.selectionChanged += OnSelectionChanged;
-
-            s_TypesWithAttributes = TypeCache.GetTypesWithAttribute<AutoNameGameObjectAttribute>();
-        }
-
-        #endregion
     }
 }
