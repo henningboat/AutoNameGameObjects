@@ -1,6 +1,9 @@
 {
     "name": "Unity.com.henningboat.autonamegameobjects.Editor",
-    "references": [],
+    "rootNamespace": "",
+    "references": [
+        "GUID:fcb931f7ca386d84dbbb45a228c0a88b"
+    ],
     "includePlatforms": [
         "Editor"
     ],
